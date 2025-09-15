@@ -1,28 +1,198 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>BB Fran Dev TikTok Login</title>
+  <meta charset="UTF-8" />
+  <title>BB Fran Dev — TikTok Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; margin-top: 100px; }
-    .login-btn {
-      display: inline-block;
-      background-color: #010101;
-      color: #fff;
-      padding: 14px 28px;
-      border-radius: 6px;
-      font-size: 18px;
-      font-weight: bold;
-      text-decoration: none;
-    }
-    .login-btn:hover { background-color: #444; }
+    :root { --bg:#0f1115; --card:#171923; --text:#e6e6e6; --accent:#dd2d85; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:Inter,system-ui,Arial,sans-serif; }
+    .wrap { max-width:900px; margin:48px auto; padding:0 20px; }
+    .card { background:var(--card); border-radius:16px; padding:24px; box-shadow:0 10px 40px rgba(0,0,0,.25); }
+    h1 { margin:0 0 10px; font-size:28px; }
+    p  { margin:8px 0; line-height:1.5; opacity:.95; }
+    .row { display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end; margin:16px 0; }
+    label { font-size:14px; opacity:.9; display:block; margin-bottom:6px; }
+    input, select { background:#0b0d13; color:#fff; border:1px solid #2a2f43; border-radius:10px; padding:10px 12px; width:100%; }
+    .col { flex:1 1 240px; min-width:240px; }
+    .btn { display:inline-flex; align-items:center; gap:10px; padding:12px 18px; border-radius:12px; border:0;
+           font-weight:700; cursor:pointer; text-decoration:none; }
+    .btn-primary { background:var(--accent); color:#fff; }
+    .btn-ghost   { background:#0b0d13; color:#fff; border:1px solid #2a2f43; }
+    .scopes { display:flex; gap:14px; flex-wrap:wrap; margin:8px 0 0; }
+    .scope { background:#0b0d13; border:1px solid #2a2f43; border-radius:999px; padding:6px 10px; font-size:12px; }
+    .note { font-size:13px; opacity:.8; margin-top:10px; }
+    .ok { color:#6ee7a2; }
+    .warn { color:#ffd166; }
+    .err { color:#ff7676; }
+    code { background:#0b0d13; border:1px solid #2a2f43; padding:2px 6px; border-radius:6px; }
+    .divider { height:1px; background:#2a2f43; margin:24px 0; opacity:.7; }
+    .muted { opacity:.7; font-size:13px; }
   </style>
 </head>
 <body>
-  <h1>Login with TikTok (Sandbox)</h1>
-  <a class="login-btn"
-     href="https://www.tiktok.com/v2/auth/authorize/?client_key=sbawntx0pzflxiv0r3&scope=user.info.basic%20user.info.profile%20video.upload%20video.publish%20video.list&response_type=code&redirect_uri=https%3A%2F%2Foauth.n8n.cloud%2Foauth2%2Fcallback&state=bbtest123">
-     Connect TikTok
-  </a>
+  <div class="wrap">
+    <div class="card">
+      <h1>BB Fran Dev — TikTok Login (Sandbox/Production)</h1>
+      <p>This page crafts a valid TikTok OAuth URL for your app and redirects to your n8n callback.</p>
+
+      <!-- CONFIG -->
+      <div class="row">
+        <div class="col">
+          <label for="env">Environment</label>
+          <select id="env">
+            <option value="sandbox" selected>Sandbox (for Test Users)</option>
+            <option value="production">Production</option>
+          </select>
+        </div>
+        <div class="col">
+          <label for="clientKey">Client Key (auto-fills by env)</label>
+          <input id="clientKey" placeholder="client_key" />
+        </div>
+        <div class="col">
+          <label for="redirectUri">Redirect URI (must match TikTok Login Kit)</label>
+          <input id="redirectUri" value="https://oauth.n8n.cloud/oauth2/callback" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col">
+          <label for="state">State (CSRF token / any string)</label>
+          <input id="state" value="bbtest123" />
+        </div>
+        <div class="col">
+          <label>&nbsp;</label>
+          <button id="togglePublish" class="btn btn-ghost" type="button">Direct Post: OFF</button>
+          <div class="note">Turn ON to include <code>video.publish</code> in scopes.</div>
+        </div>
+        <div class="col">
+          <label>&nbsp;</label>
+          <a id="goBtn" class="btn btn-primary" href="#">Connect TikTok</a>
+        </div>
+      </div>
+
+      <!-- SCOPES PREVIEW -->
+      <div class="scopes" id="scopesView"></div>
+      <div class="note">
+        <span>Required products/scopes must be enabled in the same environment you choose above.</span>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- STATUS / HELP -->
+      <p class="muted">
+        Notes:
+        <br />• In <b>Sandbox</b>, only accounts listed as <i>Target Users</i> can log in.
+        <br />• Ensure <code>Login Kit → Redirect URIs</code> includes the exact value above for the same environment.
+        <br />• If you see <span class="err">“client_key”</span> errors, you’re likely mixing Production vs Sandbox client keys or the redirect is not saved in that environment.
+        <br />• If you see <span class="err">“scope”</span> errors, that scope (e.g., <code>video.publish</code>) is not enabled in the current environment.
+      </p>
+
+      <p id="status" class="note"></p>
+
+      <div class="divider"></div>
+
+      <p class="muted">© FranScale — TikTok OAuth Demo</p>
+    </div>
+  </div>
+
+  <script>
+    // Known client keys (from your screenshots)
+    const CLIENTS = {
+      sandbox:    "sbawntx0pzflxiv0r3",   // Sandbox client_key
+      production: "awzgi5lystma50g7",     // Production client_key
+    };
+
+    // Base authorize endpoint + default scopes
+    const AUTH_URL = "https://www.tiktok.com/v2/auth/authorize/";
+    const DEFAULT_SCOPES = [
+      "user.info.basic",
+      "user.info.profile",
+      "video.upload",
+      "video.list",
+    ];
+    const PUBLISH_SCOPE = "video.publish";
+
+    // Elements
+    const envEl = document.getElementById("env");
+    const clientKeyEl = document.getElementById("clientKey");
+    const redirectEl = document.getElementById("redirectUri");
+    const stateEl = document.getElementById("state");
+    const goBtn = document.getElementById("goBtn");
+    const togglePublish = document.getElementById("togglePublish");
+    const scopesView = document.getElementById("scopesView");
+    const statusEl = document.getElementById("status");
+
+    // State
+    let directPostOn = false;
+
+    function setDefaultClientKey() {
+      const env = envEl.value;
+      clientKeyEl.value = CLIENTS[env] || "";
+      updateStatus();
+      renderScopes();
+      buildHref();
+    }
+
+    function renderScopes() {
+      const scopes = [...DEFAULT_SCOPES];
+      if (directPostOn) scopes.push(PUBLISH_SCOPE);
+      scopesView.innerHTML = scopes.map(s => `<span class="scope">${s}</span>`).join("");
+    }
+
+    function buildHref() {
+      const client_key = (clientKeyEl.value || "").trim();
+      const redirect_uri = (redirectEl.value || "").trim();
+      const state = (stateEl.value || "bbtest123").trim();
+
+      if (!client_key || !redirect_uri) {
+        goBtn.setAttribute("href", "#");
+        return;
+      }
+      const scopes = [...DEFAULT_SCOPES];
+      if (directPostOn) scopes.push(PUBLISH_SCOPE);
+
+      const params = new URLSearchParams({
+        client_key,
+        response_type: "code",
+        scope: scopes.join(" "),
+        redirect_uri, // TikTok accepts unencoded here; browser will encode as needed
+        state,
+      });
+
+      const href = `${AUTH_URL}?${params.toString()}`;
+      goBtn.setAttribute("href", href);
+    }
+
+    function updateStatus() {
+      const env = envEl.value;
+      const ck = clientKeyEl.value.trim();
+      const r = redirectEl.value.trim();
+
+      const lines = [];
+      lines.push(`Environment: ${env.toUpperCase()}`);
+      lines.push(ck ? `Client key: ${ck}` : `Client key: MISSING`);
+      lines.push(r ? `Redirect URI: ${r}` : `Redirect URI: MISSING`);
+      lines.push(`Direct Post: ${directPostOn ? "ON (adds video.publish)" : "OFF (upload-only)"}`);
+      statusEl.innerHTML = lines.join("<br/>");
+    }
+
+    // Event wiring
+    envEl.addEventListener("change", () => setDefaultClientKey());
+    clientKeyEl.addEventListener("input", () => { buildHref(); updateStatus(); });
+    redirectEl.addEventListener("input", () => { buildHref(); updateStatus(); });
+    stateEl.addEventListener("input", () => buildHref());
+    togglePublish.addEventListener("click", () => {
+      directPostOn = !directPostOn;
+      togglePublish.textContent = `Direct Post: ${directPostOn ? "ON" : "OFF"}`;
+      togglePublish.className = `btn ${directPostOn ? "btn-primary" : "btn-ghost"}`;
+      renderScopes();
+      buildHref();
+      updateStatus();
+    });
+
+    // Initialize
+    setDefaultClientKey();
+  </script>
 </body>
 </html>
